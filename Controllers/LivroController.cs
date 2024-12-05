@@ -115,17 +115,123 @@ public class LivroController : Controller
 
         return LocalRedirect("/Livro/Cadastro");
     }
+
+
+
+
+    [Route("Editar/{id}")]
+    public IActionResult Editar(int id ){
+        ViewBag.Admin = HttpContext.Session.GetString("Admin")!;
+
+         ViewBag.CategoriasDoSistema = context.Categoria.ToList(); 
+
+        // Buscar o id
+        Livro   livroAtualizado = context.Livro.FirstOrDefault(livro => livro.LivroID == id)!;
+
+        // Buscar as categorias que o   livroAtualizado possui
+        var categoriasDolivroAtualizado = context.LivroCategoria.Where(identificadorLivro => identificadorLivro.LivroID == id)
+        .Select(livro => livro.Categoria).ToList();
+
+
+        // Quero pegar informacoes do meu livro e mandar para minha View
+        ViewBag.Livro = livroAtualizado;
+        ViewBag.Categoria = categoriasDolivroAtualizado;
+        return View();
+    }
+
+
+    // Metodo que a atualiza as informacoes do livro
+
+    [Route("Atualizar/{id}")]
+
+    public IActionResult Atualizar(IFormCollection form, int id, IFormFile imagem){
+        // Buscar um livro especifico pelo id
+        Livro livroAtualizado = context.Livro.FirstOrDefault(livro => livro.LivroID == id)!;
+
+        livroAtualizado.Nome = form["Nome"];
+        livroAtualizado.Escritor = form["Escritor"];
+        livroAtualizado.Idioma = form["Idioma"];
+        livroAtualizado.Editora = form["Editora"];
+        livroAtualizado.Descricao = form["Descricao"];
+
+        // Upload de imagem
+        if(imagem != null && imagem.Length > 0){
+            // Definir o caminho da minha imagem do livro Atual, que eu quero alterar:
+            var caminhoImagem = Path.Combine("wwwroot/images/Livros", imagem.FileName);
+
+            // Verificar se o usuario colocou uma imagem para atualizar o livro
+            if(!string.IsNullOrEmpty(livroAtualizado.Imagem)){
+            // caso exista, ela irá ser apagada
+            var caminhoImagemAntiga = Path.Combine("wwwroot/images/Livros", livroAtualizado.Imagem);
+            // Ver se existe uma imagem no caminho antigo
+            if(System.IO.File.Exists(caminhoImagemAntiga)){
+                System.IO.File.Delete(caminhoImagemAntiga);
+            }
+            }
+
+            using(var stream = new FileStream(caminhoImagem, FileMode.Create)){
+                imagem.CopyTo(stream);
+            }
+
+            // Subir essa mudanca para o meu banco de dados
+            livroAtualizado.Imagem = imagem.FileName;
+        }
+
+        // Primeiro pegamos as categorias selecionadas do usuario
+        var categoriasSelecionadas = form["Categoria"].ToList();
+
+        // Segundo, pegaremos as categorias atuais do Livro
+        var categoriasAtuais = context.LivroCategoria.Where(livro => livro.LivroID == id).ToList();
+
+        // Terceiro, removeremos as categorias antigas
+        foreach(var categoria in categoriasAtuais){
+            if(!categoriasSelecionadas.Contains(categoria.CategoriaID.ToString())){
+                // Nos removeremos a categoria do nosso context
+                context.LivroCategoria.Remove(categoria);
+            }
+        }
+        
+        // Quarto, adicionaremos as novas categorias
+        foreach(var categoria in categoriasSelecionadas){
+            if(!categoriasAtuais.Any(c => c.CategoriaID.ToString() == categoria)){
+                context.LivroCategoria.Add(new LivroCategoria{
+                    CategoriaID = int.Parse(categoria),
+                    LivroID = id
+                });
+                
+            }
+        }
+
+            context.SaveChanges();
+
+            return LocalRedirect("/Livro");
+    }
+
+
+
+    [Route("Excluir/{id}")]
+
+    public IActionResult Excluir(int id){
+        // Buscar qual o livro do id que precisamos excluir
+        Livro livroEncontrado = context.Livro.First(livro => livro.LivroID == id);
+
+
+        // Buscar as categorias desse livro
+        var categoriasDoLivro = context.LivroCategoria.Where(livro => livro.LivroID == id).ToList();
+
+
+        // Precisa excluir primeiro o registro da tabela intermediaria
+        foreach(var categoria in categoriasDoLivro){
+            context.LivroCategoria.Remove(categoria);
+        }
+
+        context.Livro.Remove(livroEncontrado);
+
+        context.SaveChanges();
+
+        return LocalRedirect("/Livro");
+    }
 }
 
 
-    // public IActionResult Privacy()
-    // {
-    //     return View();
-    // }
-
-    // [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    // public IActionResult Error()
-    // {
-    //     return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-    // }
 
